@@ -1,4 +1,4 @@
-from m5stack import lcd
+from m5stack import *
 import barray
 import gc
 
@@ -14,12 +14,13 @@ class RetroPCCG:
     def __init__(self):
         self.endCheckValue = -1
         self.widthScaleParam = 1 
-    
+
     def setParam(self, widthScale, endCheck):
         self.widthScaleParam = widthScale
         self.endCheckValue =  endCheck
 
     def executePaint(self, fileName):
+        print(fileName)
         #PaintBuffer
         self.screenBuffer = barray.BARRAY(76800)
         self.dataFile = open(fileName, "r") 
