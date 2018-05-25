@@ -3,7 +3,7 @@ import barray
 import gc
 
 class Status:
-    (NONE,LINE,LINE_NEXT,PAINT,PAINT_NEXT) = range(5)
+    (NONE,LINE,LINE_NEXT,PAINT,PAINT_NEXT,LAST_PAINT) = range(6)
     
 
 class RetroPCCG:
@@ -73,6 +73,8 @@ class RetroPCCG:
                     status = Status.LINE
                 elif nextData == -20:
                     status = Status.PAINT
+                elif nextData == -30:
+                    status = Status.LAST_PAINT
                 else:
                     fileEnd = True
             elif status == Status.LINE:
@@ -113,6 +115,18 @@ class RetroPCCG:
                     paintX = nextData
                     paintY = self.readData()
                     self.paint(int(paintX * rateX) + self.offsetX,int(paintY * rateY) + self.offsetY ,color)
+            elif status == Status.LAST_PAINT:
+                if nextData <= self.endCheckValue:
+                    status = Status.NONE
+                else:
+                    color = nextData
+                    startX = self.readData()
+                    startY = self.readData()
+                    endX = self.readData()
+                    endY = self.readData()
+                    self.lastPaint(int(startX * rateX) + self.offsetX,int(startY * rateY) + self.offsetY, \
+                    int(endX * rateX) + self.offsetX,int(endY * rateY) + self.offsetY ,color)
+                
             gc.collect()
             
         #self.testBuffer()    
@@ -194,57 +208,93 @@ class RetroPCCG:
 
     def paint(self,pixelX, pixelY, color):
         #バッファにある限りループ
-        gPoint = [pixelX,pixelY]
+          #int lx; /* 領域右端のX座標 */
+          #int rx; /* 領域右端のX座標 */
+          #int y;  /* 領域のY座標 */
+          #int oy; /* 親ラインのY座標 */
+          
+        gPoint = {"lx":pixelX, "rx":pixelX ,"y":pixelY, "oy":pixelY}
         
         self.bufferList = [gPoint]
 
         while len(self.bufferList) > 0:
             checkPoint = self.bufferList.pop(0)
-            lx = checkPoint[0]
-            rx = checkPoint[0]
-            uy = checkPoint[1]
-            dy = checkPoint[1]
+            lx = checkPoint["lx"]
+            rx = checkPoint["rx"]
+            ly = checkPoint["y"]
+            oy = checkPoint["oy"]
+
+            lxsav = lx - 1
+            rxsav = rx + 1
+
             ##処理済みなら飛ばす
-            
-            if self.screenBuffer.get(lx + uy * 320) == True:
+            if self.screenBuffer.get(lx + ly * 320) == True:
                 continue
             
             ##右の境界を探す
-            for rx in range(rx,320):
-                if rx < 319:
-                    if self.screenBuffer.get(rx + 1 + uy * 320) == True:
-                        break
+            while rx < 319:
+                if self.screenBuffer.get(rx + 1 + ly * 320) == True:
+                    break
+                rx = rx + 1
 
             ##左の境界を探す
-            for lx in reversed(range(0,lx +1)):
-                if self.screenBuffer.get(lx - 1 + uy * 320) == True:
+            while lx > 0:
+                if self.screenBuffer.get(lx - 1 + ly * 320) == True:
                     break
+                lx = lx - 1
 
             ##lx から rx まで線を引く
-            self.drawLine(lx, uy, rx, uy, color)
+            self.drawLine(lx, ly, rx, ly, color)
             gc.collect()
 
             ##真上のスキャンライン走査
-            if uy - 1 >= 0:
-                self.scanLine( lx, rx, uy - 1 )
+            if ly - 1 >= 0:
+                if ly - 1 == oy:
+                    self.scanLine( lx, lxsav, ly -1 ,ly )
+                    self.scanLine( rxsav, rx, ly -1 ,ly )
+                else:
+                    self.scanLine( lx, rx, ly -1 ,ly )
             
             ##真下のスキャンライン走査
-            if dy + 1 <= 239:
-                self.scanLine( lx, rx, dy + 1)
+            if ly + 1 <= 239:
+                if ly + 1 == oy:
+                    self.scanLine( lx, lxsav, ly + 1, ly)
+                    self.scanLine( rxsav, rx, ly + 1, ly)
+                else:
+                    self.scanLine( lx, rx, ly +1, ly)
 
-    def scanLine(self, lx,rx,y ):
-        while lx < rx:
-            for lx in range(lx,rx + 1):
-                    if self.screenBuffer.get(lx + y * 320) == False:
-                        break
+    def scanLine(self, lx, rx, y, oy):
+        templx = 0
+        while lx <= rx:
+            while lx < rx:
+                if self.screenBuffer.get(lx + y * 320) == False:
+                    break
+                lx = lx + 1
+                
+            if self.screenBuffer.get(lx + y * 320) == True:
+                break
+            templx = lx
 
-            for lx in range(lx, rx + 2):
-                    if self.screenBuffer.get(lx + y * 320) == True:
-                        break
+            while lx <= rx:
+                if self.screenBuffer.get(lx + y * 320) == True:
+                    break
+                lx = lx + 1
 
-            gPoint = [lx - 1,y]
+            gPoint = {"lx":templx, "rx":lx - 1 ,"y":y, "oy":oy}
             if len(self.bufferList) < self.PAINT_BUFFER:
                 self.bufferList.append(gPoint)
+
+    #指定された矩形で、まだ塗っていない部分だけ塗る
+    def lastPaint(self, startX, startY, endX, endY, color):
+        print("lastPaint:" + str(startX) + ":"+ str(startY) +":"+  str(endX) +":"+  str(endY) )
+        y = startY
+        while y <= endY:
+            x = startX            
+            while x <= endX:
+                if self.screenBuffer.get(x + y * 320) == False: 
+                    lcd.pixel(x,y,color)
+                x = x  + 1
+            y = y + 1
 
     def testBuffer(self):
         for x in range(0,320):

@@ -20,6 +20,16 @@ def on_BwasPressed():
         randomDraw()
 
 def on_CwasPressed():
+    #押してから3秒後にスタート
+    lcd.clear(lcd.BLACK)
+    lcd.setCursor(0,0)
+    lcd.print("3\n")
+    time.sleep(1)
+    lcd.print("2\n")
+    time.sleep(1)
+    lcd.print("1\n")
+    time.sleep(1)
+
     lcd.clear(lcd.WHITE)
     retroPCCGObj = RetroPCCG()
     retroPCCGObj.executePaint("/sd/test.dat")
